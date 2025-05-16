@@ -11,7 +11,7 @@
 --* VARIABLES
 ----------------------------------------------------------------------------
  
-local refreshInterval = 10
+local refreshInterval = 10 -- This is for the monitorDashboardName animation, not the main loop cycle.
 local bShowInGameLog = false -- Set to true for detailed in-game terminal logs
 local logFileName = "CCxM"
  
@@ -19,7 +19,7 @@ local logFileName = "CCxM"
 --* LOG  (FATAL ERROR WARN_ INFO_ DEBUG TRACE)
 ----------------------------------------------------------------------------
  
-local VERSION = 1.21 -- Version incremented to exclude gold equipment (non-paxel)
+local VERSION = 1.24 -- Increased cycle delay and performance notes
 local logCounter = 0
  
 function logToFile(message, level, bPrint)
@@ -111,6 +111,7 @@ end
  
 ----------------------------------------------------------------------------
 --* NBT TO SNBT STRING CONVERSION HELPER (SIMPLIFIED)
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function convertNbtToSnbtString(nbtTable)
     if type(nbtTable) ~= "table" then
@@ -159,6 +160,7 @@ end
 
 ----------------------------------------------------------------------------
 --* GENERIC HELPER FUNCTIONS
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
 local function trimLeadingWhitespace(str)
@@ -228,6 +230,7 @@ end
 
 --[[----------------------------------------------------------------------------
 --* VANILLA EQUIPMENT ID MAPPING 
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------]]
 local function getBaseEquipmentType(requestName)
     local knownTypes = {
@@ -254,16 +257,14 @@ local function getVanillaEquivalentId(baseEquipmentType, materialLevel)
     local materialPrefix = ""
     local itemSuffix = ""
 
-    -- Map materialLevel to the prefix used in vanilla item IDs
     if materialLower == "diamond" then materialPrefix = "diamond_"
     elseif materialLower == "iron" then materialPrefix = "iron_"
     elseif materialLower == "chain" or materialLower == "chainmail" then materialPrefix = "chainmail_"
     elseif materialLower == "stone" then materialPrefix = "stone_"
     elseif materialLower == "wood" or materialLower == "wooden" then materialPrefix = "wooden_"
-    -- REMOVED: elseif materialLower == "gold" or materialLower == "golden" then materialPrefix = "golden_" 
     else
         logToFile("getVanillaEquivalentId: Material level '" .. materialLevel .. "' not mapped for standard vanilla items (excluding gold).", "DEBUG")
-        return nil -- Material not mapped for standard vanilla items (or it's gold)
+        return nil 
     end
 
     if baseTypeLower == "helmet" then itemSuffix = "helmet"
@@ -308,10 +309,10 @@ local storage
 function getPeripheral(type)
     local p = peripheral.find(type)
     if not p then
-        logToFile(type .. " peripheral not found.", "WARN_")
+        logToFile(type .. " peripheral not found.", "WARN_", true) 
         return nil
     end
-    logToFile(type .. " peripheral found.")
+    logToFile(type .. " peripheral found.") 
     return p
 end
  
@@ -325,7 +326,7 @@ function checkMonitorSize()
     monitor.setTextScale(0.5)
     local width, height = monitor.getSize()
     if width < 79 or height < 38 then
-        logToFile("Use more Monitors! (min 4x3)", "WARN_")
+        logToFile("Use more Monitors! (min 4x3)", "WARN_", true) 
         return false
     end
     return true
@@ -341,7 +342,7 @@ function getStorageBridge()
     if meBridgeP then return meBridgeP end
     local rsBridgeP = getPeripheral("rsBridge")
     if rsBridgeP then return rsBridgeP end
-    logToFile("Neither ME Storage Bridge nor RS Storage Bridge found.", "WARN_")
+    logToFile("Neither ME Storage Bridge nor RS Storage Bridge found.", "WARN_", true) 
     return nil
 end
  
@@ -357,7 +358,7 @@ function autodetectStorage()
             return side
         end
     end
-    logToFile("No storage container detected!", "WARN_")
+    logToFile("No storage container detected!", "WARN_", true) 
     return nil
 end
  
@@ -368,7 +369,6 @@ end
  
 ----------------------------------------------------------------------------
 -- MONITOR DASHBOARD NAME 
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 local dashboardName = "MineColonies DASHBOARD"
 local rainbowColors = {
@@ -411,7 +411,8 @@ function monitorDashboardName()
     if not monitor then return end 
     local localStartTime = os.clock()
     local y = 1
-    local animationCycleDuration = 3.0 
+    -- MODIFIED: Increased animation cycle duration for longer main loop delay
+    local animationCycleDuration = 5.0 -- Was 3.0
     local transitionEndTime = animationCycleDuration * 0.7
     
     while true do
@@ -667,12 +668,12 @@ end
  
 ----------------------------------------------------------------------------
 --* TERMINAL OUTPUT
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 local termWidth, termHeight
 local needTermDrawRequirements = true
-local needTermDrawRequirements_executed = false
- 
+local needTermDrawRequirements_executed = false 
+local isInitialBoot = true 
+
 function termDisplayArt(asciiArt)
     term.clear()
     local x, y = 6, 2
@@ -697,7 +698,7 @@ function termLoadingAnimation()
     local barSpeed = 25
     for i = 0, barSpeed do
         drawLoadingBar(term, barX, barY, barWidth, i / barSpeed, colors.gray, colors.orange)
-        sleep(0.1) 
+        sleep(0.05) -- MODIFIED: Slightly faster loading bar
     end
     resetDefault(term)
 end
@@ -715,66 +716,76 @@ function termDrawProgramReq_helper(y, isRequirementMet)
     term.setTextColor(colors.white)
 end
  
-function termDrawProgramReq_Header()
+function termDrawProgramReq_Header(quickDraw)
     termWidth, termHeight = term.getSize()
     local text_Divider = "-------------------------------------------------------"
     term.setCursorPos(math.floor((termWidth - #text_Divider) / 2) + 1, 4)
     term.write(text_Divider)
     local text_Requirements = "\187 Program Requirements \171"
     term.setCursorPos(math.floor((termWidth - #text_Requirements) / 2) + 1, 2)
-    textutils.slowWrite(text_Requirements, 16)
+    if quickDraw then -- MODIFIED: Draw quickly if quickDraw is true
+        term.write(text_Requirements)
+    else
+        textutils.slowWrite(text_Requirements, 16)
+    end
 end
  
-function termDrawCheckRequirements()
+function termDrawCheckRequirements(isStartup)
     if not needTermDrawRequirements_executed then
         term.clear()
-        termDrawProgramReq_Header()
+        termDrawProgramReq_Header(isStartup) 
         needTermDrawRequirements_executed = true
+        
+        term.setCursorPos(2, 6); term.write("\16 Monitor attached")
+        term.setCursorPos(2, 8); term.write("\16 Monitor size (min 4x3)")
+        term.setCursorPos(2, 10); term.write("\16 Colony Integrator attached")
+        term.setCursorPos(2, 12); term.write("\16 Colony Integrator in a colony")
+        term.setCursorPos(2, 14); term.write("\16 ME or RS Bridge attached")
+        term.setCursorPos(2, 16); term.write("\16 Storage/Warehouse attached")
     end
-    termWidth, termHeight = term.getSize()
+    termWidth, termHeight = term.getSize() 
  
     local allRequirementsMet = true
- 
-    term.setCursorPos(2, 6); term.write("\16 Monitor attached")
-    if updatePeripheralMonitor() then termDrawProgramReq_helper(6, true)
-        term.setCursorPos(2, 8); term.write("\16 Monitor size (min 4x3)")
-        if checkMonitorSize() then termDrawProgramReq_helper(8, true) else termDrawProgramReq_helper(8, false); allRequirementsMet = false end
-    else
-        termDrawProgramReq_helper(6, false); allRequirementsMet = false
-        term.setCursorPos(2, 8); term.write("\16 Monitor size (min 4x3)")
-        termDrawProgramReq_helper(8, false); allRequirementsMet = false
-    end
- 
-    term.setCursorPos(2, 10); term.write("\16 Colony Integrator attached")
-    if updatePeripheralColonyIntegrator() then termDrawProgramReq_helper(10, true)
-        term.setCursorPos(2, 12); term.write("\16 Colony Integrator in a colony")
-        if colony and colony.isInColony() then termDrawProgramReq_helper(12, true) else termDrawProgramReq_helper(12, false); allRequirementsMet = false end
-    else
-        termDrawProgramReq_helper(10, false); allRequirementsMet = false
-        term.setCursorPos(2, 12); term.write("\16 Colony Integrator in a colony")
-        termDrawProgramReq_helper(12, false); allRequirementsMet = false
-    end
- 
-    term.setCursorPos(2, 14); term.write("\16 ME or RS Bridge attached")
-    if updatePeripheralStorageBridge() then termDrawProgramReq_helper(14, true) else termDrawProgramReq_helper(14, false); allRequirementsMet = false end
+    local monitorOk, monitorSizeOk, colonyIntegratorOk, colonyInColonyOk, bridgeOk, storageOk = false, false, false, false, false, false
+
+    monitorOk = updatePeripheralMonitor()
+    if monitorOk then monitorSizeOk = checkMonitorSize() else monitorSizeOk = false end
     
-    term.setCursorPos(2, 16); term.write("\16 Storage/Warehouse attached")
-    if updatePeripheralStorage() then termDrawProgramReq_helper(16, true) else termDrawProgramReq_helper(16, false); allRequirementsMet = false end
+    colonyIntegratorOk = updatePeripheralColonyIntegrator()
+    if colonyIntegratorOk and colony then colonyInColonyOk = colony.isInColony() else colonyInColonyOk = false end
+
+    bridgeOk = updatePeripheralStorageBridge()
+    storageOk = updatePeripheralStorage()
+
+    termDrawProgramReq_helper(6, monitorOk)
+    termDrawProgramReq_helper(8, monitorOk and monitorSizeOk) 
+    
+    termDrawProgramReq_helper(10, colonyIntegratorOk)
+    termDrawProgramReq_helper(12, colonyIntegratorOk and colonyInColonyOk) 
+
+    termDrawProgramReq_helper(14, bridgeOk)
+    termDrawProgramReq_helper(16, storageOk)
+
+    allRequirementsMet = monitorOk and monitorSizeOk and colonyIntegratorOk and colonyInColonyOk and bridgeOk and storageOk
  
     if allRequirementsMet then
-        needTermDrawRequirements = false
-        needTermDrawRequirements_executed = false
+        needTermDrawRequirements = false 
+        isInitialBoot = false 
         local text_Fullfilled = "Requirements fullfilled"
         term.setCursorPos(math.floor((termWidth - #text_Fullfilled) / 2), 19)
         term.setTextColor(colors.green)
-        sleep(0.5); textutils.slowWrite(text_Fullfilled, 16); textutils.slowWrite(" . . .", 5); sleep(1) 
+        if isStartup then 
+            sleep(0.1); term.write(text_Fullfilled); term.write(" . . ."); sleep(0.2)
+        else
+            term.write(text_Fullfilled .. " . . .") 
+        end
         resetDefault(term)
         return true
     end
     return false
 end
  
-function termShowLog()
+function termShowLog() 
     termWidth, termHeight = term.getSize()
     term.setCursorPos(1, 1); term.clearLine()
     term.setCursorPos(1, 2); term.clearLine()
@@ -784,11 +795,12 @@ function termShowLog()
     term.write(text_Divider)
     local text_LogTitle = "\187 MineColonies Logs \171   v" .. VERSION
     term.setCursorPos(math.floor((termWidth - #text_LogTitle) / 2) + 1, 2)
-    textutils.slowWrite(text_LogTitle, 16)
+    textutils.slowWrite(text_LogTitle, 16) -- Keep slowWrite here for normal operation
 end
  
 ----------------------------------------------------------------------------
 --* MINECOLONIES
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function removeNamespace(itemName)
     if type(itemName) ~= "string" then return tostring(itemName) end
@@ -824,12 +836,14 @@ function colonyCategorizeRequests()
         return equipment_list, builder_list_standard, builder_list_domum, others_list
     end
  
+    -- PERFORMANCE HOTSPOT: colony.getRequests() can be slow if many requests.
     local success, requests = safeCall(colony.getRequests)
     if not success or not requests or #requests == 0 then
         logToFile("Failed to get colony requests or no requests found.", "INFO_")
         return equipment_list, builder_list_standard, builder_list_domum, others_list
     end
  
+    -- PERFORMANCE HOTSPOT: This loop iterates all requests.
     for _, req in ipairs(requests) do
         if not req.items or not req.items[1] then
             logToFile("Skipping request due to missing item data: " .. tableToString(req), "DEBUG")
@@ -945,6 +959,9 @@ end
  
 ----------------------------------------------------------------------------
 --* STORAGE SYSTEM REQUEST AND SEND
+-- PERFORMANCE HOTSPOT: This entire function is critical. It loops through all
+-- categorized requests and makes multiple blocking peripheral calls to the AE bridge
+-- for each item (getItem, exportItem, isItemCrafting, craftItem).
 ----------------------------------------------------------------------------
 local b_craftEquipment = true
 local item_quantity_field = nil
@@ -961,7 +978,6 @@ function equipmentCraft(formatted_request_name, request_level, original_item_id_
         return "minecraft:bow", true
     end
 
-    -- Paxel Substitution Logic
     if baseType == "Pickaxe" or baseType == "Axe" or baseType == "Shovel" then
         local paxelMaterial = nil
         local rl_lower = string.lower(request_level or "")
@@ -981,7 +997,6 @@ function equipmentCraft(formatted_request_name, request_level, original_item_id_
         end
     end
 
-    -- Standard Vanilla Equivalent Logic (for non-paxel tools/armor)
     local targetVanillaId = getVanillaEquivalentId(baseType, request_level)
     if targetVanillaId then
         logToFile("equipmentCraft: For request '" .. formatted_request_name .. "' (Level: " .. request_level .. "), determined target VANILLA item: " .. targetVanillaId, "INFO_")
@@ -1211,27 +1226,29 @@ end
  
 ----------------------------------------------------------------------------
 --* MAIN LOGIC FUNCTIONS
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
-function updatePeripheralAll()
+-- PERFORMANCE HOTSPOT: This function, especially the loop within it, can be slow if peripherals are missing.
+function updatePeripheralAll(isStartup)
     local allOk = true
     if not updatePeripheralMonitor() then allOk = false end
-    if allOk and not checkMonitorSize() then allOk = false end
+    if allOk and not checkMonitorSize() then allOk = false end 
     if not updatePeripheralColonyIntegrator() then allOk = false end
-    if allOk and colony and not colony.isInColony() then allOk = false end
+    if allOk and colony and not colony.isInColony() then allOk = false end 
     if not updatePeripheralStorageBridge() then allOk = false end
     if not updatePeripheralStorage() then allOk = false end
     
-    needTermDrawRequirements = not allOk
+    needTermDrawRequirements = not allOk 
  
     while needTermDrawRequirements do
-        if not termDrawCheckRequirements() then 
-            sleep(1) 
+        logToFile("Peripheral check loop: Some requirements not met. Re-checking...", "INFO_") 
+        if not termDrawCheckRequirements(isStartup and isInitialBoot) then 
+            sleep(1) -- This sleep is important if a peripheral is missing to prevent high CPU usage
         else
-            needTermDrawRequirements = false
+            needTermDrawRequirements = false 
         end
     end
+    isInitialBoot = false 
 end
  
 function requestAndFulfill()
@@ -1249,29 +1266,41 @@ function monitorShowDashboard(equipment_list, builder_list_standard, builder_lis
     if not monitor then return end
     monitor.clear()
     monitorDashboardRequests(equipment_list, builder_list_standard, builder_list_domum, others_list)
-    monitorDashboardName() 
+    monitorDashboardName() -- This function contains its own animation loop and sleep calls.
 end
  
 ----------------------------------------------------------------------------
 --* MAIN
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
 function main()
+    logToFile("Script starting... Version: " .. VERSION, "INFO_") 
     termWidth, termHeight = term.getSize()
+    logToFile("Terminal loading animation starting...", "INFO_") 
     termLoadingAnimation() 
-    updatePeripheralAll() 
+    logToFile("Terminal loading animation finished.", "INFO_") 
+
+    logToFile("Initial peripheral check starting...", "INFO_") 
+    updatePeripheralAll(true) 
+    logToFile("Initial peripheral check finished.", "INFO_") 
+
+    logToFile("Monitor loading animation starting...", "INFO_") 
     monitorLoadingAnimation() 
+    logToFile("Monitor loading animation finished.", "INFO_") 
  
+    logToFile("Entering main loop...", "INFO_") 
     while true do
-        updatePeripheralAll() 
+        updatePeripheralAll(false) 
         if bShowInGameLog then termShowLog() end
         
+        -- PERFORMANCE HOTSPOT: requestAndFulfill contains the bulk of the logic and peripheral calls.
         local equipment_list, builder_list_standard, builder_list_domum, others_list = requestAndFulfill() 
         monitorShowDashboard(equipment_list, builder_list_standard, builder_list_domum, others_list) 
         
-        sleep(0.1) 
+        -- MODIFIED: Increased main loop sleep for better server performance
+        sleep(0.5) -- Was 0.1
     end
 end
  
 main()
+
