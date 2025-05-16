@@ -11,8 +11,8 @@
 --* VARIABLES
 ----------------------------------------------------------------------------
  
-local refreshInterval = 10 
-local bShowInGameLog = false 
+local refreshInterval = 10 -- This is for the monitorDashboardName animation, not the main loop cycle.
+local bShowInGameLog = false -- Set to true for detailed in-game terminal logs
 local logFileName = "CCxM"
  
 ----------------------------------------------------------------------------
@@ -20,6 +20,7 @@ local logFileName = "CCxM"
 ----------------------------------------------------------------------------
  
 local VERSION = 1.24 -- Optimized peripheral checks, restored startup display style
+                     -- This version will be updated to 1.24.1 for fingerprint optimization.
 local logCounter = 0
  
 function logToFile(message, level, bPrint)
@@ -111,7 +112,6 @@ end
  
 ----------------------------------------------------------------------------
 --* NBT TO SNBT STRING CONVERSION HELPER (SIMPLIFIED)
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function convertNbtToSnbtString(nbtTable)
     if type(nbtTable) ~= "table" then
@@ -160,7 +160,6 @@ end
 
 ----------------------------------------------------------------------------
 --* GENERIC HELPER FUNCTIONS
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
 local function trimLeadingWhitespace(str)
@@ -194,7 +193,7 @@ function tableToString(tbl, indent)
     return result_string .. string.rep("  ", indent) .. "}"
 end
  
-function writeToLogFile(fileName, armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
+function writeToLogFile(fileName, equipment_list, builder_list_standard, builder_list_domum, others_list)
     local success, file_or_err = pcall(io.open, fileName, "w")
     if not success then
         logToFile("Could not open file for writing: " .. fileName .. " Error: " .. tostring(file_or_err), "ERROR", true)
@@ -202,13 +201,8 @@ function writeToLogFile(fileName, armor_list, tools_list, other_equipment_list, 
     end
     local file = file_or_err
  
-    file:write("Armor List:\n")
-    file:write(tableToString(armor_list) .. "\n\n")
-    file:write("Tools List:\n")
-    file:write(tableToString(tools_list) .. "\n\n")
-    file:write("Other Equipment List:\n")
-    file:write(tableToString(other_equipment_list) .. "\n\n")
-
+    file:write("Equipment List:\n")
+    file:write(tableToString(equipment_list) .. "\n\n")
     file:write("Standard Builder List:\n")
     file:write(tableToString(builder_list_standard) .. "\n\n")
     file:write("Domum Builder List:\n")
@@ -235,7 +229,7 @@ end
 
 --[[----------------------------------------------------------------------------
 --* VANILLA EQUIPMENT ID MAPPING 
--- ... (This section is unchanged)
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------]]
 local function getBaseEquipmentType(requestName)
     local knownTypes = {
@@ -303,6 +297,7 @@ end
  
 ----------------------------------------------------------------------------
 --* CHECK REQUIREMENTS 
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
  
 local monitor = peripheral.find("monitor")
@@ -373,7 +368,7 @@ end
  
 ----------------------------------------------------------------------------
 -- MONITOR DASHBOARD NAME 
--- ... (This section is unchanged)
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
 local dashboardName = "MineColonies DASHBOARD"
 local rainbowColors = {
@@ -448,7 +443,7 @@ end
  
 ----------------------------------------------------------------------------
 --* ART
--- ... (This section is unchanged)
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
 local artUltimateCCxM_Logo = [[
  _   _ _ _   _                 _
@@ -467,7 +462,7 @@ local artUltimateCCxM_Logo = [[
 ]]
 ----------------------------------------------------------------------------
 --* MONITOR OR TERMINAL OUTPUT
--- ... (This section is unchanged)
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
 function resetDefault(screen)
     if not screen then return end
@@ -498,7 +493,7 @@ function drawLoadingBar(screen, x, y, width, progress, bgColor, barColor)
 end
 ----------------------------------------------------------------------------
 --* MONITOR OUTPUT
--- ... (This section is unchanged)
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
 function monitorDisplayArt(asciiArt, mon_)
     if not mon_ then return end
@@ -591,22 +586,15 @@ function drawBox(xMin, xMax, yMin, yMax, title, bcolor, tcolor)
     monitor.setBackgroundColor(colors.black)
 end
  
-function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
+function monitorDashboardRequests(equipment_list, builder_list_standard, builder_list_domum, others_list)
     if not monitor then return end
     local x_size, y_size = monitor.getSize()
  
-    local armor_count = #armor_list
-    local tools_count = #tools_list
-    local other_equip_count = #other_equipment_list
+    local equipment_count = #equipment_list
     local standard_builder_count = #builder_list_standard
     local domum_builder_count = #builder_list_domum
     local others_count = #others_list
-
-    local total_equipment_lines = armor_count + tools_count + other_equip_count
-    if armor_count > 0 and (tools_count > 0 or other_equip_count > 0) then total_equipment_lines = total_equipment_lines + 1 end 
-    if tools_count > 0 and other_equip_count > 0 then total_equipment_lines = total_equipment_lines + 1 end 
-
-
+ 
     local actual_standard_builder_lines = math.ceil(standard_builder_count / 2)
     local actual_domum_builder_lines = domum_builder_count
     local actual_builder_lines = actual_standard_builder_lines + actual_domum_builder_lines
@@ -615,19 +603,13 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
         actual_builder_lines = actual_builder_lines + 1 
     end
  
-    local estimated_box_height = (total_equipment_lines + actual_builder_lines + others_count) + 11 
-    if armor_count > 0 then estimated_box_height = estimated_box_height + 1 end 
-    if tools_count > 0 then estimated_box_height = estimated_box_height + 1 end 
-    if other_equip_count > 0 then estimated_box_height = estimated_box_height + 1 end 
-
+    local estimated_box_height = (equipment_count + actual_builder_lines + others_count) + 11
     estimated_box_height = math.min(estimated_box_height, y_size -1)
  
     drawBox(2, x_size - 1, 3, estimated_box_height, "REQUESTS", colors.gray, colors.purple)
  
-    local current_y = 5
-    
-    monitorPrintText(current_y, "center", "Builder", colors.orange)
-    current_y = current_y + 1
+    monitorPrintText(5, "center", "Builder", colors.orange)
+    local current_y = 6 
  
     local i = 1
     while i <= standard_builder_count do
@@ -647,7 +629,9 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
     end
 
     if actual_standard_builder_lines > 0 and actual_domum_builder_lines > 0 then
-        if current_y < estimated_box_height -1 then current_y = current_y + 1 end
+        if current_y < estimated_box_height -1 then
+            current_y = current_y + 1 
+        end
     end
     
     for _, item in ipairs(builder_list_domum) do
@@ -657,34 +641,10 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
     end
     
     current_y = current_y + 1 
-    if armor_count > 0 and current_y < estimated_box_height -1 then
-      monitorPrintText(current_y, "center", "Armor", colors.orange)
+    if current_y < estimated_box_height -1 then
+      monitorPrintText(current_y, "center", "Equipment", colors.orange)
       current_y = current_y + 1
-      for _, item in ipairs(armor_list) do
-          if current_y >= estimated_box_height -1 then break end
-          monitorPrintText(current_y, "left", item.name, item.displayColor) 
-          monitorPrintText(current_y, "right", item.target, colors.lightGray)
-          current_y = current_y + 1
-      end
-      if tools_count > 0 or other_equip_count > 0 then current_y = current_y + 1 end 
-    end
-
-    if tools_count > 0 and current_y < estimated_box_height -1 then
-      monitorPrintText(current_y, "center", "Tools", colors.orange)
-      current_y = current_y + 1
-      for _, item in ipairs(tools_list) do
-          if current_y >= estimated_box_height -1 then break end
-          monitorPrintText(current_y, "left", item.name, item.displayColor) 
-          monitorPrintText(current_y, "right", item.target, colors.lightGray)
-          current_y = current_y + 1
-      end
-       if other_equip_count > 0 then current_y = current_y + 1 end 
-    end
-    
-    if other_equip_count > 0 and current_y < estimated_box_height -1 then
-      monitorPrintText(current_y, "center", "Other Equipment", colors.orange)
-      current_y = current_y + 1
-      for _, item in ipairs(other_equipment_list) do
+      for _, item in ipairs(equipment_list) do
           if current_y >= estimated_box_height -1 then break end
           monitorPrintText(current_y, "left", item.name, item.displayColor) 
           monitorPrintText(current_y, "right", item.target, colors.lightGray)
@@ -694,7 +654,7 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
  
     current_y = current_y + 1
     if current_y < estimated_box_height -1 then
-      monitorPrintText(current_y, "center", "Other Requests", colors.orange)
+      monitorPrintText(current_y, "center", "Other", colors.orange)
       current_y = current_y + 1
       for _, item in ipairs(others_list) do
           if current_y >= estimated_box_height -1 then break end
@@ -707,6 +667,7 @@ end
  
 ----------------------------------------------------------------------------
 --* TERMINAL OUTPUT
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
 local termWidth, termHeight
 local needTermDrawRequirements = true
@@ -773,15 +734,14 @@ function termDrawCheckRequirements(isStartup)
     if not needTermDrawRequirements_executed then
         term.clear()
         termDrawProgramReq_Header(isStartup) 
+        needTermDrawRequirements_executed = true
         
-        -- Draw all static labels once when the screen is first set up
         term.setCursorPos(2, 6); term.write("\16 Monitor attached")
         term.setCursorPos(2, 8); term.write("\16 Monitor size (min 4x3)")
         term.setCursorPos(2, 10); term.write("\16 Colony Integrator attached")
         term.setCursorPos(2, 12); term.write("\16 Colony Integrator in a colony")
         term.setCursorPos(2, 14); term.write("\16 ME or RS Bridge attached")
         term.setCursorPos(2, 16); term.write("\16 Storage/Warehouse attached")
-        needTermDrawRequirements_executed = true -- Set after labels are drawn
     end
     termWidth, termHeight = term.getSize() 
  
@@ -840,7 +800,7 @@ end
  
 ----------------------------------------------------------------------------
 --* MINECOLONIES
--- ... (This section is unchanged)
+-- ... (This section is unchanged from CC_Main.lua v1.24)
 ----------------------------------------------------------------------------
 function removeNamespace(itemName)
     if type(itemName) ~= "string" then return tostring(itemName) end
@@ -866,22 +826,20 @@ local function isEquipment(desc)
 end
  
 function colonyCategorizeRequests()
-    local armor_list = {}            
-    local tools_list = {}            
-    local other_equipment_list = {}  
+    local equipment_list = {}
     local builder_list_standard = {} 
     local builder_list_domum = {}    
-    local others_list = {}           
+    local others_list = {}
  
     if not colony then
         logToFile("Colony Integrator not available for categorizing requests.", "WARN_", true)
-        return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
+        return equipment_list, builder_list_standard, builder_list_domum, others_list
     end
  
     local success, requests = safeCall(colony.getRequests)
     if not success or not requests or #requests == 0 then
         logToFile("Failed to get colony requests or no requests found.", "INFO_")
-        return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
+        return equipment_list, builder_list_standard, builder_list_domum, others_list
     end
  
     for _, req in ipairs(requests) do
@@ -896,7 +854,7 @@ function colonyCategorizeRequests()
         local count = req.count or 0
         local item_displayName = trimLeadingWhitespace(req.items[1].displayName or name_from_req)
         local item_name_raw = req.items[1].name or "" 
-        local itemIsGenerallyEquipment = isEquipment(desc) 
+        local itemIsEquipment = isEquipment(desc)
         
         local nbtToStore = req.items[1].nbt
         local fingerprintToStore = req.items[1].fingerprint
@@ -913,6 +871,7 @@ function colonyCategorizeRequests()
             desc = desc, 
             provided = 0, 
             isCraftable = false,
+            equipment = itemIsEquipment, 
             displayColor = colors.white, 
             level = "Any Level", 
             nbtData = nbtToStore,
@@ -958,7 +917,7 @@ function colonyCategorizeRequests()
                 itemEntry.name = name_from_req 
                 table.insert(builder_list_standard, itemEntry)
             end
-        elseif itemIsGenerallyEquipment then 
+        elseif itemIsEquipment then 
             local levelTable = {
                 ["and with maximal level: Leather"] = "Leather", ["and with maximal level: Stone"] = "Stone",
                 ["and with maximal level: Chain"] = "Chain", ["and with maximal level: Gold"] = "Gold",
@@ -986,29 +945,18 @@ function colonyCategorizeRequests()
             itemEntry.level = extractedLevel 
             itemEntry.name = extractedLevel .. " " .. name_from_req 
             
-            local baseType = getBaseEquipmentType(name_from_req)
-            if baseType == "Helmet" or baseType == "Chestplate" or baseType == "Leggings" or baseType == "Boots" then
-                table.insert(armor_list, itemEntry)
-            elseif baseType == "Pickaxe" or baseType == "Axe" or baseType == "Shovel" or baseType == "Hoe" or baseType == "Sword" then
-                table.insert(tools_list, itemEntry)
-            elseif baseType == "Bow" or baseType == "Shears" then
-                 table.insert(other_equipment_list, itemEntry)
-            else
-                logToFile("Unknown equipment type for categorization: " .. name_from_req .. " (Base: " .. baseType .. "). Adding to Other Equipment as fallback.", "WARN_")
-                table.insert(other_equipment_list, itemEntry) 
-            end
+            table.insert(equipment_list, itemEntry)
         else
             itemEntry.name = name_from_req 
             table.insert(others_list, itemEntry)
         end
         ::continue_categorize_loop::
     end
-    return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
+    return equipment_list, builder_list_standard, builder_list_domum, others_list
 end
  
 ----------------------------------------------------------------------------
 --* STORAGE SYSTEM REQUEST AND SEND
--- ... (This section is unchanged from 1.23)
 ----------------------------------------------------------------------------
 local b_craftEquipment = true
 local item_quantity_field = nil
@@ -1023,10 +971,6 @@ function equipmentCraft(formatted_request_name, request_level, original_item_id_
     if baseType == "Bow" then
         logToFile("equipmentCraft: Request is for a Bow. Targeting vanilla minecraft:bow.", "INFO_")
         return "minecraft:bow", true
-    end
-    if baseType == "Shears" then
-        logToFile("equipmentCraft: Request is for Shears. Targeting vanilla minecraft:shears.", "INFO_")
-        return "minecraft:shears", true
     end
 
     if baseType == "Pickaxe" or baseType == "Axe" or baseType == "Shovel" then
@@ -1085,16 +1029,15 @@ function detectQuantityFieldOnce(itemName, nbtTable, fingerprint)
     return item_quantity_field
 end
  
-function storageSystemHandleRequests(request_list, list_name_for_logging) 
-    list_name_for_logging = list_name_for_logging or "UnknownList"
+function storageSystemHandleRequests(request_list) -- MODIFIED: Removed list_name_for_logging as it's one list now
     if not bridge or not storage then
-        logToFile("Bridge or storage not available for handling requests ("..list_name_for_logging..").", "WARN_", true)
+        logToFile("Bridge or storage not available for handling requests.", "WARN_", true)
         return
     end
     if not request_list or #request_list == 0 then
         return
     end
-    logToFile("Processing request list: " .. list_name_for_logging .. " (" .. #request_list .. " items)", "INFO_")
+    logToFile("Processing request list (" .. #request_list .. " items)", "INFO_")
 
 
     for _, item in ipairs(request_list) do
@@ -1111,27 +1054,27 @@ function storageSystemHandleRequests(request_list, list_name_for_logging)
             logToFile("  Original Raw ID: " .. item.item_name_raw, "DEBUG", bShowInGameLog)
         end
  
-        if (list_name_for_logging == "Armor" or list_name_for_logging == "Tools" or list_name_for_logging == "OtherEquipment") and b_craftEquipment then 
+        if item.equipment and b_craftEquipment then 
             local potentialTargetItem, tierCraftableByRules
             potentialTargetItem, tierCraftableByRules = equipmentCraft(item.name, item.level, item.item_name_raw)
 
             if tierCraftableByRules then
                 if potentialTargetItem ~= item.item_name_raw then
-                    logToFile("  EquipmentCraft ("..list_name_for_logging.."): Mapped '"..item.item_name_raw.."' to TARGET '" .. potentialTargetItem .. "'. Will use this for AE2.", "INFO_")
+                    logToFile("  EquipmentCraft: Mapped '"..item.item_name_raw.."' to TARGET '" .. potentialTargetItem .. "'. Will use this for AE2.", "INFO_")
                     itemToRequest = potentialTargetItem
                     useOriginalNbtAndFingerprint = false 
                     nbtTableForRequest = nil          
                     fingerprintForRequest = nil       
                 else
-                    logToFile("  EquipmentCraft ("..list_name_for_logging.."): Target '" .. itemToRequest .. "' is same as original. Tier rules allow. Using original NBT/FP if present.", "INFO_")
+                    logToFile("  EquipmentCraft: Target '" .. itemToRequest .. "' is same as original. Tier rules allow. Using original NBT/FP if present.", "INFO_")
                 end
                 canCraftThisItemBasedOnRules = true
             else
-                logToFile("  EquipmentCraft ("..list_name_for_logging.."): Rules prevent crafting for: " .. item.name .. " (Level: " .. item.level .. ", Original ID: " .. item.item_name_raw .. ")", "INFO_")
+                logToFile("  EquipmentCraft: Rules prevent crafting for: " .. item.name .. " (Level: " .. item.level .. ", Original ID: " .. item.item_name_raw .. ")", "INFO_")
                 canCraftThisItemBasedOnRules = false
                 useOriginalNbtAndFingerprint = false 
             end
-        elseif (list_name_for_logging == "Armor" or list_name_for_logging == "Tools" or list_name_for_logging == "OtherEquipment") and not b_craftEquipment then
+        elseif item.equipment and not b_craftEquipment then
             canCraftThisItemBasedOnRules = false 
             logToFile("  Master equipment crafting switch b_craftEquipment is OFF. Cannot craft: ".. item.item_displayName, "INFO_")
             useOriginalNbtAndFingerprint = false 
@@ -1142,20 +1085,21 @@ function storageSystemHandleRequests(request_list, list_name_for_logging)
         
         local itemData, itemStoredSystem, itemIsCraftableSystemAE
         local getItemSpec = { name = itemToRequest } 
+        local logMessagePrefix -- For constructing log message
 
         if useOriginalNbtAndFingerprint and fingerprintForRequest then 
             getItemSpec.fingerprint = fingerprintForRequest
-            if isDomumItem or item.equipment then logToFile("  Calling bridge.getItem with fingerprint spec: " .. tableToString(getItemSpec), "DEBUG", bShowInGameLog) end
-        else
-            if not useOriginalNbtAndFingerprint and nbtTableForRequest then
-                 local nbtString = convertNbtToSnbtString(nbtTableForRequest)
-                 if nbtString then getItemSpec.nbt = nbtString end
-            elseif useOriginalNbtAndFingerprint and nbtTableForRequest and not fingerprintForRequest then
-                 local nbtString = convertNbtToSnbtString(nbtTableForRequest)
-                 if nbtString then getItemSpec.nbt = nbtString end
+            logMessagePrefix = "  Calling bridge.getItem for '"..itemToRequest.."' with fingerprint spec: "
+        else 
+            if (itemToRequest == item.item_name_raw or isDomumItem) and nbtTableForRequest then
+                local nbtString = convertNbtToSnbtString(nbtTableForRequest)
+                if nbtString then getItemSpec.nbt = nbtString end
+                logMessagePrefix = "  Calling bridge.getItem for '"..itemToRequest.."' with name/NBT string spec: "
+            else
+                logMessagePrefix = "  Calling bridge.getItem for '"..itemToRequest.."' with name spec (no relevant NBT/fingerprint): "
             end
-            if isDomumItem or item.equipment then logToFile("  Calling bridge.getItem for '"..itemToRequest.."' with name/NBT string spec: " .. tableToString(getItemSpec), "DEBUG", bShowInGameLog) end
         end
+        if isDomumItem or item.equipment then logToFile(logMessagePrefix .. tableToString(getItemSpec), "DEBUG", bShowInGameLog) end
         
         local successGetItem, resultGetItem = safeCall(bridge.getItem, getItemSpec)
  
@@ -1176,20 +1120,21 @@ function storageSystemHandleRequests(request_list, list_name_for_logging)
             local countToExport = item.count - item.provided
             if countToExport > 0 then
                 local exportSpec = { name = itemToRequest, count = countToExport }
+                logMessagePrefix = "  Calling bridge.exportItemToPeripheral for '"..itemToRequest.."' "
 
                 if useOriginalNbtAndFingerprint and fingerprintForRequest then
                     exportSpec.fingerprint = fingerprintForRequest
-                    if isDomumItem or item.equipment then logToFile("  Calling bridge.exportItemToPeripheral with fingerprint spec: " .. tableToString(exportSpec), "DEBUG", bShowInGameLog) end
+                    logMessagePrefix = logMessagePrefix .. "with fingerprint spec: "
                 else
-                    if not useOriginalNbtAndFingerprint and nbtTableForRequest then 
+                    if (itemToRequest == item.item_name_raw or isDomumItem) and nbtTableForRequest then 
                          local nbtString = convertNbtToSnbtString(nbtTableForRequest)
                          if nbtString then exportSpec.nbt = nbtString end
-                    elseif useOriginalNbtAndFingerprint and nbtTableForRequest and not fingerprintForRequest then
-                         local nbtString = convertNbtToSnbtString(nbtTableForRequest)
-                         if nbtString then exportSpec.nbt = nbtString end
+                         logMessagePrefix = logMessagePrefix .. "with name/NBT string spec: "
+                    else
+                        logMessagePrefix = logMessagePrefix .. "with name spec (no relevant NBT/fingerprint): "
                     end
-                    if isDomumItem or item.equipment then logToFile("  Calling bridge.exportItemToPeripheral for '"..itemToRequest.."' with name/NBT string spec: " .. tableToString(exportSpec), "DEBUG", bShowInGameLog) end
                 end
+                if isDomumItem or item.equipment then logToFile(logMessagePrefix .. tableToString(exportSpec), "DEBUG", bShowInGameLog) end
                 
                 local successExport, exportedResult = safeCall(bridge.exportItemToPeripheral, exportSpec, storage)
                 
@@ -1222,7 +1167,7 @@ function storageSystemHandleRequests(request_list, list_name_for_logging)
                 local recheckSpec = { name = itemToRequest }
                 if useOriginalNbtAndFingerprint and fingerprintForRequest then 
                     recheckSpec.fingerprint = fingerprintForRequest
-                elseif useOriginalNbtAndFingerprint and nbtTableForRequest and not fingerprintForRequest then 
+                elseif (itemToRequest == item.item_name_raw or isDomumItem) and nbtTableForRequest and not (useOriginalNbtAndFingerprint and fingerprintForRequest) then 
                     local nbtString = convertNbtToSnbtString(nbtTableForRequest)
                     if nbtString then recheckSpec.nbt = nbtString end
                 end
@@ -1241,9 +1186,7 @@ function storageSystemHandleRequests(request_list, list_name_for_logging)
         
         if item.provided < item.count and item.isCraftable and canCraftThisItemBasedOnRules then
             local nbtStringToCraft = nil
-            if itemToRequest == item.item_name_raw and nbtTableForRequest then
-                 nbtStringToCraft = convertNbtToSnbtString(nbtTableForRequest)
-            elseif isDomumItem and nbtTableForRequest then 
+            if (itemToRequest == item.item_name_raw or isDomumItem) and nbtTableForRequest then
                  nbtStringToCraft = convertNbtToSnbtString(nbtTableForRequest)
             end
 
@@ -1308,23 +1251,42 @@ function updatePeripheralAll(isStartup)
 end
  
 function requestAndFulfill()
-    local armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list = colonyCategorizeRequests()
+    -- MODIFIED: Now expects equipment_list to be a single list again.
+    local equipment_list, builder_list_standard, builder_list_domum, others_list = colonyCategorizeRequests()
     
-    storageSystemHandleRequests(armor_list, "Armor")
-    storageSystemHandleRequests(tools_list, "Tools")
-    storageSystemHandleRequests(other_equipment_list, "OtherEquipment")
-    storageSystemHandleRequests(builder_list_standard, "StandardBuilder") 
-    storageSystemHandleRequests(builder_list_domum, "DomumBuilder")    
-    storageSystemHandleRequests(others_list, "OtherColony")
+    -- MODIFIED: Call storageSystemHandleRequests for the single equipment_list
+    storageSystemHandleRequests(equipment_list) -- This will process armor, tools, other_equipment together
+    storageSystemHandleRequests(builder_list_standard) 
+    storageSystemHandleRequests(builder_list_domum)    
+    storageSystemHandleRequests(others_list)
     
-    return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
+    -- MODIFIED: Return the single equipment_list
+    return equipment_list, builder_list_standard, builder_list_domum, others_list
 end
  
-function monitorShowDashboard(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
-    if not monitor then return end
+function monitorShowDashboard(equipment_list, builder_list_standard, builder_list_domum, others_list)
+    if not monitor then 
+        logToFile("monitorShowDashboard: Monitor not available, skipping display.", "WARN_")
+        return 
+    end
+    logToFile("monitorShowDashboard: Starting display update.", "DEBUG")
+    
+    logToFile("monitorShowDashboard: Clearing monitor...", "TRACE")
     monitor.clear()
-    monitorDashboardRequests(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
+    logToFile("monitorShowDashboard: Monitor cleared.", "TRACE")
+    
+    logToFile("monitorShowDashboard: Calling monitorDashboardRequests...", "TRACE")
+    -- MODIFIED: Pass single equipment_list. The display function will need to adapt or be simplified.
+    -- For now, assuming monitorDashboardRequests can handle a single equipment list
+    -- or you'll adjust it separately.
+    monitorDashboardRequests(equipment_list, builder_list_standard, builder_list_domum, others_list)
+    logToFile("monitorShowDashboard: monitorDashboardRequests finished.", "TRACE")
+    
+    logToFile("monitorShowDashboard: Calling monitorDashboardName...", "TRACE")
     monitorDashboardName() 
+    logToFile("monitorShowDashboard: monitorDashboardName finished.", "TRACE")
+    
+    logToFile("monitorShowDashboard: Display update finished.", "DEBUG")
 end
  
 ----------------------------------------------------------------------------
@@ -1332,7 +1294,7 @@ end
 ----------------------------------------------------------------------------
  
 function main()
-    logToFile("Script starting... Version: " .. VERSION, "INFO_") 
+    logToFile("Script starting... Version: " .. VERSION .. ".1 (Fingerprint Optimization)", "INFO_") 
     termWidth, termHeight = term.getSize()
     logToFile("Terminal loading animation starting...", "INFO_") 
     termLoadingAnimation() 
@@ -1351,9 +1313,17 @@ function main()
         -- updatePeripheralAll(false) -- REMOVED from main loop for performance
         if bShowInGameLog then termShowLog() end
         
-        local armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list = requestAndFulfill() 
-        monitorShowDashboard(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list) 
+        logToFile("Main loop: Calling requestAndFulfill...", "DEBUG")
+        -- MODIFIED: Expects single equipment_list back
+        local equipment_list, builder_list_standard, builder_list_domum, others_list = requestAndFulfill() 
+        logToFile("Main loop: requestAndFulfill finished. Equipment: " .. #equipment_list, "DEBUG")
         
+        logToFile("Main loop: Calling monitorShowDashboard...", "DEBUG")
+        -- MODIFIED: Passes single equipment_list
+        monitorShowDashboard(equipment_list, builder_list_standard, builder_list_domum, others_list) 
+        logToFile("Main loop: monitorShowDashboard finished.", "DEBUG")
+        
+        logToFile("Main loop: Cycle end, sleeping.", "TRACE")
         sleep(0.5) 
     end
 end
