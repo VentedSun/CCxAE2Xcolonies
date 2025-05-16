@@ -11,15 +11,15 @@
 --* VARIABLES
 ----------------------------------------------------------------------------
  
-local refreshInterval = 10 -- This is for the monitorDashboardName animation, not the main loop cycle.
-local bShowInGameLog = false -- Set to true for detailed in-game terminal logs
+local refreshInterval = 10 
+local bShowInGameLog = false 
 local logFileName = "CCxM"
  
 ----------------------------------------------------------------------------
 --* LOG  (FATAL ERROR WARN_ INFO_ DEBUG TRACE)
 ----------------------------------------------------------------------------
  
-local VERSION = 1.24 -- Increased cycle delay and performance notes
+local VERSION = 1.25 -- Refactored equipment categories (Armor, Tools, Other)
 local logCounter = 0
  
 function logToFile(message, level, bPrint)
@@ -111,7 +111,6 @@ end
  
 ----------------------------------------------------------------------------
 --* NBT TO SNBT STRING CONVERSION HELPER (SIMPLIFIED)
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function convertNbtToSnbtString(nbtTable)
     if type(nbtTable) ~= "table" then
@@ -160,7 +159,6 @@ end
 
 ----------------------------------------------------------------------------
 --* GENERIC HELPER FUNCTIONS
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
 local function trimLeadingWhitespace(str)
@@ -194,7 +192,7 @@ function tableToString(tbl, indent)
     return result_string .. string.rep("  ", indent) .. "}"
 end
  
-function writeToLogFile(fileName, equipment_list, builder_list_standard, builder_list_domum, others_list)
+function writeToLogFile(fileName, armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
     local success, file_or_err = pcall(io.open, fileName, "w")
     if not success then
         logToFile("Could not open file for writing: " .. fileName .. " Error: " .. tostring(file_or_err), "ERROR", true)
@@ -202,8 +200,13 @@ function writeToLogFile(fileName, equipment_list, builder_list_standard, builder
     end
     local file = file_or_err
  
-    file:write("Equipment List:\n")
-    file:write(tableToString(equipment_list) .. "\n\n")
+    file:write("Armor List:\n")
+    file:write(tableToString(armor_list) .. "\n\n")
+    file:write("Tools List:\n")
+    file:write(tableToString(tools_list) .. "\n\n")
+    file:write("Other Equipment List:\n")
+    file:write(tableToString(other_equipment_list) .. "\n\n")
+
     file:write("Standard Builder List:\n")
     file:write(tableToString(builder_list_standard) .. "\n\n")
     file:write("Domum Builder List:\n")
@@ -230,12 +233,12 @@ end
 
 --[[----------------------------------------------------------------------------
 --* VANILLA EQUIPMENT ID MAPPING 
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------]]
 local function getBaseEquipmentType(requestName)
     local knownTypes = {
         "Helmet", "Chestplate", "Leggings", "Boots",
-        "Sword", "Pickaxe", "Axe", "Shovel", "Hoe", "Shears", "Bow"
+        "Sword", "Pickaxe", "Axe", "Shovel", "Hoe", 
+        "Shears", "Bow" -- Ensure Shears and Bow are here
     }
     local lowerRequestName = string.lower(requestName or "") 
     for _, typeName in ipairs(knownTypes) do
@@ -257,11 +260,15 @@ local function getVanillaEquivalentId(baseEquipmentType, materialLevel)
     local materialPrefix = ""
     local itemSuffix = ""
 
+    if baseTypeLower == "bow" then return vanillaPrefix .. "bow" end
+    if baseTypeLower == "shears" then return vanillaPrefix .. "shears" end -- Shears have no material
+
     if materialLower == "diamond" then materialPrefix = "diamond_"
     elseif materialLower == "iron" then materialPrefix = "iron_"
     elseif materialLower == "chain" or materialLower == "chainmail" then materialPrefix = "chainmail_"
     elseif materialLower == "stone" then materialPrefix = "stone_"
     elseif materialLower == "wood" or materialLower == "wooden" then materialPrefix = "wooden_"
+    elseif materialLower == "leather" then materialPrefix = "leather_" -- For leather armor
     else
         logToFile("getVanillaEquivalentId: Material level '" .. materialLevel .. "' not mapped for standard vanilla items (excluding gold).", "DEBUG")
         return nil 
@@ -276,21 +283,21 @@ local function getVanillaEquivalentId(baseEquipmentType, materialLevel)
     elseif baseTypeLower == "axe" then itemSuffix = "axe"
     elseif baseTypeLower == "shovel" then itemSuffix = "shovel"
     elseif baseTypeLower == "hoe" then itemSuffix = "hoe"
-    elseif baseTypeLower == "bow" then return vanillaPrefix .. "bow" 
     else
         logToFile("getVanillaEquivalentId: Unsupported base equipment type '" .. baseEquipmentType .. "' for vanilla mapping.", "DEBUG")
         return nil 
     end
     
-    if (materialPrefix == "chainmail_") and 
+    if (materialPrefix == "chainmail_" or materialPrefix == "leather_") and 
        (itemSuffix == "sword" or itemSuffix == "pickaxe" or itemSuffix == "axe" or 
         itemSuffix == "shovel" or itemSuffix == "hoe") then
-        logToFile("getVanillaEquivalentId: Chainmail tools like '" .. itemSuffix .. "' do not exist in vanilla.", "DEBUG")
+        logToFile("getVanillaEquivalentId: Tools like '" .. materialPrefix .. itemSuffix .. "' do not exist in vanilla.", "DEBUG")
         return nil
     end
     
-    if materialLower == "leather" and (itemSuffix == "helmet" or itemSuffix == "chestplate" or itemSuffix == "leggings" or itemSuffix == "boots") then
-        return vanillaPrefix .. "leather_" .. itemSuffix 
+    -- Leather armor uses leather_ prefix, other armors use material_ prefix
+    if materialPrefix == "leather_" then
+        return vanillaPrefix .. materialPrefix .. itemSuffix
     end
 
     return vanillaPrefix .. materialPrefix .. itemSuffix
@@ -369,6 +376,7 @@ end
  
 ----------------------------------------------------------------------------
 -- MONITOR DASHBOARD NAME 
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 local dashboardName = "MineColonies DASHBOARD"
 local rainbowColors = {
@@ -411,8 +419,7 @@ function monitorDashboardName()
     if not monitor then return end 
     local localStartTime = os.clock()
     local y = 1
-    -- MODIFIED: Increased animation cycle duration for longer main loop delay
-    local animationCycleDuration = 5.0 -- Was 3.0
+    local animationCycleDuration = 5.0 
     local transitionEndTime = animationCycleDuration * 0.7
     
     while true do
@@ -494,7 +501,6 @@ function drawLoadingBar(screen, x, y, width, progress, bgColor, barColor)
 end
 ----------------------------------------------------------------------------
 --* MONITOR OUTPUT
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function monitorDisplayArt(asciiArt, mon_)
     if not mon_ then return end
@@ -587,15 +593,22 @@ function drawBox(xMin, xMax, yMin, yMax, title, bcolor, tcolor)
     monitor.setBackgroundColor(colors.black)
 end
  
-function monitorDashboardRequests(equipment_list, builder_list_standard, builder_list_domum, others_list)
+function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
     if not monitor then return end
     local x_size, y_size = monitor.getSize()
  
-    local equipment_count = #equipment_list
+    local armor_count = #armor_list
+    local tools_count = #tools_list
+    local other_equip_count = #other_equipment_list
     local standard_builder_count = #builder_list_standard
     local domum_builder_count = #builder_list_domum
     local others_count = #others_list
- 
+
+    local total_equipment_lines = armor_count + tools_count + other_equip_count
+    if armor_count > 0 and (tools_count > 0 or other_equip_count > 0) then total_equipment_lines = total_equipment_lines + 1 end -- Spacer
+    if tools_count > 0 and other_equip_count > 0 then total_equipment_lines = total_equipment_lines + 1 end -- Spacer
+
+
     local actual_standard_builder_lines = math.ceil(standard_builder_count / 2)
     local actual_domum_builder_lines = domum_builder_count
     local actual_builder_lines = actual_standard_builder_lines + actual_domum_builder_lines
@@ -604,13 +617,20 @@ function monitorDashboardRequests(equipment_list, builder_list_standard, builder
         actual_builder_lines = actual_builder_lines + 1 
     end
  
-    local estimated_box_height = (equipment_count + actual_builder_lines + others_count) + 11
+    local estimated_box_height = (total_equipment_lines + actual_builder_lines + others_count) + 11 -- Adjusted for equipment sections
+    if armor_count > 0 then estimated_box_height = estimated_box_height + 1 end -- Title for Armor
+    if tools_count > 0 then estimated_box_height = estimated_box_height + 1 end -- Title for Tools
+    if other_equip_count > 0 then estimated_box_height = estimated_box_height + 1 end -- Title for Other Equip
+
     estimated_box_height = math.min(estimated_box_height, y_size -1)
  
     drawBox(2, x_size - 1, 3, estimated_box_height, "REQUESTS", colors.gray, colors.purple)
  
-    monitorPrintText(5, "center", "Builder", colors.orange)
-    local current_y = 6 
+    local current_y = 5
+    
+    -- Builder Section
+    monitorPrintText(current_y, "center", "Builder", colors.orange)
+    current_y = current_y + 1
  
     local i = 1
     while i <= standard_builder_count do
@@ -630,9 +650,7 @@ function monitorDashboardRequests(equipment_list, builder_list_standard, builder
     end
 
     if actual_standard_builder_lines > 0 and actual_domum_builder_lines > 0 then
-        if current_y < estimated_box_height -1 then
-            current_y = current_y + 1 
-        end
+        if current_y < estimated_box_height -1 then current_y = current_y + 1 end
     end
     
     for _, item in ipairs(builder_list_domum) do
@@ -641,11 +659,36 @@ function monitorDashboardRequests(equipment_list, builder_list_standard, builder
         current_y = current_y + 1
     end
     
+    -- Equipment Sections
     current_y = current_y + 1 
-    if current_y < estimated_box_height -1 then
-      monitorPrintText(current_y, "center", "Equipment", colors.orange)
+    if armor_count > 0 and current_y < estimated_box_height -1 then
+      monitorPrintText(current_y, "center", "Armor", colors.orange)
       current_y = current_y + 1
-      for _, item in ipairs(equipment_list) do
+      for _, item in ipairs(armor_list) do
+          if current_y >= estimated_box_height -1 then break end
+          monitorPrintText(current_y, "left", item.name, item.displayColor) 
+          monitorPrintText(current_y, "right", item.target, colors.lightGray)
+          current_y = current_y + 1
+      end
+      if tools_count > 0 or other_equip_count > 0 then current_y = current_y + 1 end -- Spacer
+    end
+
+    if tools_count > 0 and current_y < estimated_box_height -1 then
+      monitorPrintText(current_y, "center", "Tools", colors.orange)
+      current_y = current_y + 1
+      for _, item in ipairs(tools_list) do
+          if current_y >= estimated_box_height -1 then break end
+          monitorPrintText(current_y, "left", item.name, item.displayColor) 
+          monitorPrintText(current_y, "right", item.target, colors.lightGray)
+          current_y = current_y + 1
+      end
+       if other_equip_count > 0 then current_y = current_y + 1 end -- Spacer
+    end
+    
+    if other_equip_count > 0 and current_y < estimated_box_height -1 then
+      monitorPrintText(current_y, "center", "Other Equipment", colors.orange)
+      current_y = current_y + 1
+      for _, item in ipairs(other_equipment_list) do
           if current_y >= estimated_box_height -1 then break end
           monitorPrintText(current_y, "left", item.name, item.displayColor) 
           monitorPrintText(current_y, "right", item.target, colors.lightGray)
@@ -655,7 +698,7 @@ function monitorDashboardRequests(equipment_list, builder_list_standard, builder
  
     current_y = current_y + 1
     if current_y < estimated_box_height -1 then
-      monitorPrintText(current_y, "center", "Other", colors.orange)
+      monitorPrintText(current_y, "center", "Other Requests", colors.orange)
       current_y = current_y + 1
       for _, item in ipairs(others_list) do
           if current_y >= estimated_box_height -1 then break end
@@ -668,6 +711,7 @@ end
  
 ----------------------------------------------------------------------------
 --* TERMINAL OUTPUT
+-- ... (This section is unchanged from version 1.23)
 ----------------------------------------------------------------------------
 local termWidth, termHeight
 local needTermDrawRequirements = true
@@ -698,7 +742,7 @@ function termLoadingAnimation()
     local barSpeed = 25
     for i = 0, barSpeed do
         drawLoadingBar(term, barX, barY, barWidth, i / barSpeed, colors.gray, colors.orange)
-        sleep(0.05) -- MODIFIED: Slightly faster loading bar
+        sleep(0.05) 
     end
     resetDefault(term)
 end
@@ -723,7 +767,7 @@ function termDrawProgramReq_Header(quickDraw)
     term.write(text_Divider)
     local text_Requirements = "\187 Program Requirements \171"
     term.setCursorPos(math.floor((termWidth - #text_Requirements) / 2) + 1, 2)
-    if quickDraw then -- MODIFIED: Draw quickly if quickDraw is true
+    if quickDraw then 
         term.write(text_Requirements)
     else
         textutils.slowWrite(text_Requirements, 16)
@@ -795,12 +839,11 @@ function termShowLog()
     term.write(text_Divider)
     local text_LogTitle = "\187 MineColonies Logs \171   v" .. VERSION
     term.setCursorPos(math.floor((termWidth - #text_LogTitle) / 2) + 1, 2)
-    textutils.slowWrite(text_LogTitle, 16) -- Keep slowWrite here for normal operation
+    textutils.slowWrite(text_LogTitle, 16) 
 end
  
 ----------------------------------------------------------------------------
 --* MINECOLONIES
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function removeNamespace(itemName)
     if type(itemName) ~= "string" then return tostring(itemName) end
@@ -826,24 +869,24 @@ local function isEquipment(desc)
 end
  
 function colonyCategorizeRequests()
-    local equipment_list = {}
+    local armor_list = {}            -- NEW
+    local tools_list = {}            -- NEW
+    local other_equipment_list = {}  -- NEW
     local builder_list_standard = {} 
     local builder_list_domum = {}    
-    local others_list = {}
+    local others_list = {}           -- For non-builder, non-equipment requests
  
     if not colony then
         logToFile("Colony Integrator not available for categorizing requests.", "WARN_", true)
-        return equipment_list, builder_list_standard, builder_list_domum, others_list
+        return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
     end
  
-    -- PERFORMANCE HOTSPOT: colony.getRequests() can be slow if many requests.
     local success, requests = safeCall(colony.getRequests)
     if not success or not requests or #requests == 0 then
         logToFile("Failed to get colony requests or no requests found.", "INFO_")
-        return equipment_list, builder_list_standard, builder_list_domum, others_list
+        return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
     end
  
-    -- PERFORMANCE HOTSPOT: This loop iterates all requests.
     for _, req in ipairs(requests) do
         if not req.items or not req.items[1] then
             logToFile("Skipping request due to missing item data: " .. tableToString(req), "DEBUG")
@@ -856,7 +899,7 @@ function colonyCategorizeRequests()
         local count = req.count or 0
         local item_displayName = trimLeadingWhitespace(req.items[1].displayName or name_from_req)
         local item_name_raw = req.items[1].name or "" 
-        local itemIsEquipment = isEquipment(desc)
+        local itemIsGenerallyEquipment = isEquipment(desc) -- General check
         
         local nbtToStore = req.items[1].nbt
         local fingerprintToStore = req.items[1].fingerprint
@@ -873,7 +916,7 @@ function colonyCategorizeRequests()
             desc = desc, 
             provided = 0, 
             isCraftable = false,
-            equipment = itemIsEquipment, 
+            -- equipment = itemIsGenerallyEquipment, -- We'll use specific lists now
             displayColor = colors.white, 
             level = "Any Level", 
             nbtData = nbtToStore,
@@ -882,6 +925,7 @@ function colonyCategorizeRequests()
 
         if string.find(target, "Builder", 1, true) then
             if isDomumOrnamentumItem then
+                -- ... (Domum formatting logic remains the same) ...
                 local blockType = removeNamespace(item_name_raw)
                 local textureData = nbtToStore and nbtToStore["textureData"]
                 local textureDataSize = 0
@@ -919,7 +963,7 @@ function colonyCategorizeRequests()
                 itemEntry.name = name_from_req 
                 table.insert(builder_list_standard, itemEntry)
             end
-        elseif itemIsEquipment then 
+        elseif itemIsGenerallyEquipment then 
             local levelTable = {
                 ["and with maximal level: Leather"] = "Leather", ["and with maximal level: Stone"] = "Stone",
                 ["and with maximal level: Chain"] = "Chain", ["and with maximal level: Gold"] = "Gold",
@@ -947,21 +991,30 @@ function colonyCategorizeRequests()
             itemEntry.level = extractedLevel 
             itemEntry.name = extractedLevel .. " " .. name_from_req 
             
-            table.insert(equipment_list, itemEntry)
+            -- Sort into Armor, Tools, or Other Equipment
+            local baseType = getBaseEquipmentType(name_from_req)
+            if baseType == "Helmet" or baseType == "Chestplate" or baseType == "Leggings" or baseType == "Boots" then
+                table.insert(armor_list, itemEntry)
+            elseif baseType == "Pickaxe" or baseType == "Axe" or baseType == "Shovel" or baseType == "Hoe" or baseType == "Sword" then
+                table.insert(tools_list, itemEntry)
+            elseif baseType == "Bow" or baseType == "Shears" then
+                 table.insert(other_equipment_list, itemEntry)
+            else
+                logToFile("Unknown equipment type for categorization: " .. name_from_req .. " (Base: " .. baseType .. "). Adding to Other Equipment as fallback.", "WARN_")
+                table.insert(other_equipment_list, itemEntry) -- Fallback
+            end
         else
             itemEntry.name = name_from_req 
             table.insert(others_list, itemEntry)
         end
         ::continue_categorize_loop::
     end
-    return equipment_list, builder_list_standard, builder_list_domum, others_list
+    return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
 end
  
 ----------------------------------------------------------------------------
 --* STORAGE SYSTEM REQUEST AND SEND
--- PERFORMANCE HOTSPOT: This entire function is critical. It loops through all
--- categorized requests and makes multiple blocking peripheral calls to the AE bridge
--- for each item (getItem, exportItem, isItemCrafting, craftItem).
+-- ... (equipmentCraft and storageSystemHandleRequests will need to be adapted for the new lists)
 ----------------------------------------------------------------------------
 local b_craftEquipment = true
 local item_quantity_field = nil
@@ -976,6 +1029,10 @@ function equipmentCraft(formatted_request_name, request_level, original_item_id_
     if baseType == "Bow" then
         logToFile("equipmentCraft: Request is for a Bow. Targeting vanilla minecraft:bow.", "INFO_")
         return "minecraft:bow", true
+    end
+    if baseType == "Shears" then
+        logToFile("equipmentCraft: Request is for Shears. Targeting vanilla minecraft:shears.", "INFO_")
+        return "minecraft:shears", true
     end
 
     if baseType == "Pickaxe" or baseType == "Axe" or baseType == "Shovel" then
@@ -1034,12 +1091,19 @@ function detectQuantityFieldOnce(itemName, nbtTable, fingerprint)
     return item_quantity_field
 end
  
-function storageSystemHandleRequests(request_list)
+function storageSystemHandleRequests(request_list, list_name_for_logging) -- Added list_name for better logs
+    list_name_for_logging = list_name_for_logging or "UnknownList"
     if not bridge or not storage then
-        logToFile("Bridge or storage not available for handling requests.", "WARN_", true)
+        logToFile("Bridge or storage not available for handling requests ("..list_name_for_logging..").", "WARN_", true)
         return
     end
- 
+    if not request_list or #request_list == 0 then
+        -- logToFile("No items in request list: " .. list_name_for_logging, "DEBUG") -- Optional: can be spammy
+        return
+    end
+    logToFile("Processing request list: " .. list_name_for_logging .. " (" .. #request_list .. " items)", "INFO_")
+
+
     for _, item in ipairs(request_list) do
         local itemToRequest = item.item_name_raw 
         local nbtTableForRequest = item.nbtData   
@@ -1054,27 +1118,30 @@ function storageSystemHandleRequests(request_list)
             logToFile("  Original Raw ID: " .. item.item_name_raw, "DEBUG", bShowInGameLog)
         end
  
-        if item.equipment and b_craftEquipment then 
+        -- The 'equipment' field in itemEntry is not strictly needed anymore for this check,
+        -- as we are processing specific lists (armor, tools, other_equipment).
+        -- However, b_craftEquipment still acts as a master switch.
+        if (list_name_for_logging == "Armor" or list_name_for_logging == "Tools" or list_name_for_logging == "OtherEquipment") and b_craftEquipment then 
             local potentialTargetItem, tierCraftableByRules
             potentialTargetItem, tierCraftableByRules = equipmentCraft(item.name, item.level, item.item_name_raw)
 
             if tierCraftableByRules then
                 if potentialTargetItem ~= item.item_name_raw then
-                    logToFile("  EquipmentCraft: Mapped '"..item.item_name_raw.."' to TARGET '" .. potentialTargetItem .. "'. Will use this for AE2.", "INFO_")
+                    logToFile("  EquipmentCraft ("..list_name_for_logging.."): Mapped '"..item.item_name_raw.."' to TARGET '" .. potentialTargetItem .. "'. Will use this for AE2.", "INFO_")
                     itemToRequest = potentialTargetItem
                     useOriginalNbtAndFingerprint = false 
                     nbtTableForRequest = nil          
                     fingerprintForRequest = nil       
                 else
-                    logToFile("  EquipmentCraft: Target '" .. itemToRequest .. "' is same as original. Tier rules allow. Using original NBT/FP if present.", "INFO_")
+                    logToFile("  EquipmentCraft ("..list_name_for_logging.."): Target '" .. itemToRequest .. "' is same as original. Tier rules allow. Using original NBT/FP if present.", "INFO_")
                 end
                 canCraftThisItemBasedOnRules = true
             else
-                logToFile("  EquipmentCraft: Rules prevent crafting for: " .. item.name .. " (Level: " .. item.level .. ", Original ID: " .. item.item_name_raw .. ")", "INFO_")
+                logToFile("  EquipmentCraft ("..list_name_for_logging.."): Rules prevent crafting for: " .. item.name .. " (Level: " .. item.level .. ", Original ID: " .. item.item_name_raw .. ")", "INFO_")
                 canCraftThisItemBasedOnRules = false
                 useOriginalNbtAndFingerprint = false 
             end
-        elseif item.equipment and not b_craftEquipment then
+        elseif (list_name_for_logging == "Armor" or list_name_for_logging == "Tools" or list_name_for_logging == "OtherEquipment") and not b_craftEquipment then
             canCraftThisItemBasedOnRules = false 
             logToFile("  Master equipment crafting switch b_craftEquipment is OFF. Cannot craft: ".. item.item_displayName, "INFO_")
             useOriginalNbtAndFingerprint = false 
@@ -1228,7 +1295,6 @@ end
 --* MAIN LOGIC FUNCTIONS
 ----------------------------------------------------------------------------
  
--- PERFORMANCE HOTSPOT: This function, especially the loop within it, can be slow if peripherals are missing.
 function updatePeripheralAll(isStartup)
     local allOk = true
     if not updatePeripheralMonitor() then allOk = false end
@@ -1243,7 +1309,7 @@ function updatePeripheralAll(isStartup)
     while needTermDrawRequirements do
         logToFile("Peripheral check loop: Some requirements not met. Re-checking...", "INFO_") 
         if not termDrawCheckRequirements(isStartup and isInitialBoot) then 
-            sleep(1) -- This sleep is important if a peripheral is missing to prevent high CPU usage
+            sleep(1) 
         else
             needTermDrawRequirements = false 
         end
@@ -1252,21 +1318,23 @@ function updatePeripheralAll(isStartup)
 end
  
 function requestAndFulfill()
-    local equipment_list, builder_list_standard, builder_list_domum, others_list = colonyCategorizeRequests()
+    local armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list = colonyCategorizeRequests()
     
-    storageSystemHandleRequests(equipment_list)
-    storageSystemHandleRequests(builder_list_standard) 
-    storageSystemHandleRequests(builder_list_domum)    
-    storageSystemHandleRequests(others_list)
+    storageSystemHandleRequests(armor_list, "Armor")
+    storageSystemHandleRequests(tools_list, "Tools")
+    storageSystemHandleRequests(other_equipment_list, "OtherEquipment")
+    storageSystemHandleRequests(builder_list_standard, "StandardBuilder") 
+    storageSystemHandleRequests(builder_list_domum, "DomumBuilder")    
+    storageSystemHandleRequests(others_list, "OtherColony")
     
-    return equipment_list, builder_list_standard, builder_list_domum, others_list
+    return armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list
 end
  
-function monitorShowDashboard(equipment_list, builder_list_standard, builder_list_domum, others_list)
+function monitorShowDashboard(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
     if not monitor then return end
     monitor.clear()
-    monitorDashboardRequests(equipment_list, builder_list_standard, builder_list_domum, others_list)
-    monitorDashboardName() -- This function contains its own animation loop and sleep calls.
+    monitorDashboardRequests(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list)
+    monitorDashboardName() 
 end
  
 ----------------------------------------------------------------------------
@@ -1293,12 +1361,10 @@ function main()
         updatePeripheralAll(false) 
         if bShowInGameLog then termShowLog() end
         
-        -- PERFORMANCE HOTSPOT: requestAndFulfill contains the bulk of the logic and peripheral calls.
-        local equipment_list, builder_list_standard, builder_list_domum, others_list = requestAndFulfill() 
-        monitorShowDashboard(equipment_list, builder_list_standard, builder_list_domum, others_list) 
+        local armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list = requestAndFulfill() 
+        monitorShowDashboard(armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list) 
         
-        -- MODIFIED: Increased main loop sleep for better server performance
-        sleep(0.5) -- Was 0.1
+        sleep(0.5) 
     end
 end
  
