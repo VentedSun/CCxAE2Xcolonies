@@ -287,7 +287,7 @@ end
  
 local function scrollUp()
     if currentScrollOffset > 0 then
-        currentScrollOffset = currentScrollOffset - 1
+        currentScrollOffset = currentScrollOffset - 5
         drawUI()
     end
 end
@@ -297,7 +297,7 @@ local function scrollDown()
     local maxVisibleOnScreen = linesToDisplayOnScreen
     if #logLines > maxVisibleOnScreen then
         if currentScrollOffset < (#logLines - maxVisibleOnScreen) then
-            currentScrollOffset = currentScrollOffset + 1
+            currentScrollOffset = currentScrollOffset + 5
             drawUI()
         end
     end
