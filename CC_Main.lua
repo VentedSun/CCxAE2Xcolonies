@@ -19,7 +19,7 @@ local logFileName = "CCxM"
 --* LOG  (FATAL ERROR WARN_ INFO_ DEBUG TRACE)
 ----------------------------------------------------------------------------
  
-local VERSION = 1.25 -- Refactored equipment categories (Armor, Tools, Other)
+local VERSION = 1.24 -- Optimized peripheral checks, restored startup display style
 local logCounter = 0
  
 function logToFile(message, level, bPrint)
@@ -111,6 +111,7 @@ end
  
 ----------------------------------------------------------------------------
 --* NBT TO SNBT STRING CONVERSION HELPER (SIMPLIFIED)
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function convertNbtToSnbtString(nbtTable)
     if type(nbtTable) ~= "table" then
@@ -159,6 +160,7 @@ end
 
 ----------------------------------------------------------------------------
 --* GENERIC HELPER FUNCTIONS
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
 local function trimLeadingWhitespace(str)
@@ -233,12 +235,12 @@ end
 
 --[[----------------------------------------------------------------------------
 --* VANILLA EQUIPMENT ID MAPPING 
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------]]
 local function getBaseEquipmentType(requestName)
     local knownTypes = {
         "Helmet", "Chestplate", "Leggings", "Boots",
-        "Sword", "Pickaxe", "Axe", "Shovel", "Hoe", 
-        "Shears", "Bow" -- Ensure Shears and Bow are here
+        "Sword", "Pickaxe", "Axe", "Shovel", "Hoe", "Shears", "Bow"
     }
     local lowerRequestName = string.lower(requestName or "") 
     for _, typeName in ipairs(knownTypes) do
@@ -260,15 +262,11 @@ local function getVanillaEquivalentId(baseEquipmentType, materialLevel)
     local materialPrefix = ""
     local itemSuffix = ""
 
-    if baseTypeLower == "bow" then return vanillaPrefix .. "bow" end
-    if baseTypeLower == "shears" then return vanillaPrefix .. "shears" end -- Shears have no material
-
     if materialLower == "diamond" then materialPrefix = "diamond_"
     elseif materialLower == "iron" then materialPrefix = "iron_"
     elseif materialLower == "chain" or materialLower == "chainmail" then materialPrefix = "chainmail_"
     elseif materialLower == "stone" then materialPrefix = "stone_"
     elseif materialLower == "wood" or materialLower == "wooden" then materialPrefix = "wooden_"
-    elseif materialLower == "leather" then materialPrefix = "leather_" -- For leather armor
     else
         logToFile("getVanillaEquivalentId: Material level '" .. materialLevel .. "' not mapped for standard vanilla items (excluding gold).", "DEBUG")
         return nil 
@@ -283,21 +281,21 @@ local function getVanillaEquivalentId(baseEquipmentType, materialLevel)
     elseif baseTypeLower == "axe" then itemSuffix = "axe"
     elseif baseTypeLower == "shovel" then itemSuffix = "shovel"
     elseif baseTypeLower == "hoe" then itemSuffix = "hoe"
+    elseif baseTypeLower == "bow" then return vanillaPrefix .. "bow" 
     else
         logToFile("getVanillaEquivalentId: Unsupported base equipment type '" .. baseEquipmentType .. "' for vanilla mapping.", "DEBUG")
         return nil 
     end
     
-    if (materialPrefix == "chainmail_" or materialPrefix == "leather_") and 
+    if (materialPrefix == "chainmail_") and 
        (itemSuffix == "sword" or itemSuffix == "pickaxe" or itemSuffix == "axe" or 
         itemSuffix == "shovel" or itemSuffix == "hoe") then
-        logToFile("getVanillaEquivalentId: Tools like '" .. materialPrefix .. itemSuffix .. "' do not exist in vanilla.", "DEBUG")
+        logToFile("getVanillaEquivalentId: Chainmail tools like '" .. itemSuffix .. "' do not exist in vanilla.", "DEBUG")
         return nil
     end
     
-    -- Leather armor uses leather_ prefix, other armors use material_ prefix
-    if materialPrefix == "leather_" then
-        return vanillaPrefix .. materialPrefix .. itemSuffix
+    if materialLower == "leather" and (itemSuffix == "helmet" or itemSuffix == "chestplate" or itemSuffix == "leggings" or itemSuffix == "boots") then
+        return vanillaPrefix .. "leather_" .. itemSuffix 
     end
 
     return vanillaPrefix .. materialPrefix .. itemSuffix
@@ -305,7 +303,6 @@ end
  
 ----------------------------------------------------------------------------
 --* CHECK REQUIREMENTS 
--- ... (This section is unchanged)
 ----------------------------------------------------------------------------
  
 local monitor = peripheral.find("monitor")
@@ -501,6 +498,7 @@ function drawLoadingBar(screen, x, y, width, progress, bgColor, barColor)
 end
 ----------------------------------------------------------------------------
 --* MONITOR OUTPUT
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function monitorDisplayArt(asciiArt, mon_)
     if not mon_ then return end
@@ -605,8 +603,8 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
     local others_count = #others_list
 
     local total_equipment_lines = armor_count + tools_count + other_equip_count
-    if armor_count > 0 and (tools_count > 0 or other_equip_count > 0) then total_equipment_lines = total_equipment_lines + 1 end -- Spacer
-    if tools_count > 0 and other_equip_count > 0 then total_equipment_lines = total_equipment_lines + 1 end -- Spacer
+    if armor_count > 0 and (tools_count > 0 or other_equip_count > 0) then total_equipment_lines = total_equipment_lines + 1 end 
+    if tools_count > 0 and other_equip_count > 0 then total_equipment_lines = total_equipment_lines + 1 end 
 
 
     local actual_standard_builder_lines = math.ceil(standard_builder_count / 2)
@@ -617,10 +615,10 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
         actual_builder_lines = actual_builder_lines + 1 
     end
  
-    local estimated_box_height = (total_equipment_lines + actual_builder_lines + others_count) + 11 -- Adjusted for equipment sections
-    if armor_count > 0 then estimated_box_height = estimated_box_height + 1 end -- Title for Armor
-    if tools_count > 0 then estimated_box_height = estimated_box_height + 1 end -- Title for Tools
-    if other_equip_count > 0 then estimated_box_height = estimated_box_height + 1 end -- Title for Other Equip
+    local estimated_box_height = (total_equipment_lines + actual_builder_lines + others_count) + 11 
+    if armor_count > 0 then estimated_box_height = estimated_box_height + 1 end 
+    if tools_count > 0 then estimated_box_height = estimated_box_height + 1 end 
+    if other_equip_count > 0 then estimated_box_height = estimated_box_height + 1 end 
 
     estimated_box_height = math.min(estimated_box_height, y_size -1)
  
@@ -628,7 +626,6 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
  
     local current_y = 5
     
-    -- Builder Section
     monitorPrintText(current_y, "center", "Builder", colors.orange)
     current_y = current_y + 1
  
@@ -659,7 +656,6 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
         current_y = current_y + 1
     end
     
-    -- Equipment Sections
     current_y = current_y + 1 
     if armor_count > 0 and current_y < estimated_box_height -1 then
       monitorPrintText(current_y, "center", "Armor", colors.orange)
@@ -670,7 +666,7 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
           monitorPrintText(current_y, "right", item.target, colors.lightGray)
           current_y = current_y + 1
       end
-      if tools_count > 0 or other_equip_count > 0 then current_y = current_y + 1 end -- Spacer
+      if tools_count > 0 or other_equip_count > 0 then current_y = current_y + 1 end 
     end
 
     if tools_count > 0 and current_y < estimated_box_height -1 then
@@ -682,7 +678,7 @@ function monitorDashboardRequests(armor_list, tools_list, other_equipment_list, 
           monitorPrintText(current_y, "right", item.target, colors.lightGray)
           current_y = current_y + 1
       end
-       if other_equip_count > 0 then current_y = current_y + 1 end -- Spacer
+       if other_equip_count > 0 then current_y = current_y + 1 end 
     end
     
     if other_equip_count > 0 and current_y < estimated_box_height -1 then
@@ -711,7 +707,6 @@ end
  
 ----------------------------------------------------------------------------
 --* TERMINAL OUTPUT
--- ... (This section is unchanged from version 1.23)
 ----------------------------------------------------------------------------
 local termWidth, termHeight
 local needTermDrawRequirements = true
@@ -778,14 +773,15 @@ function termDrawCheckRequirements(isStartup)
     if not needTermDrawRequirements_executed then
         term.clear()
         termDrawProgramReq_Header(isStartup) 
-        needTermDrawRequirements_executed = true
         
+        -- Draw all static labels once when the screen is first set up
         term.setCursorPos(2, 6); term.write("\16 Monitor attached")
         term.setCursorPos(2, 8); term.write("\16 Monitor size (min 4x3)")
         term.setCursorPos(2, 10); term.write("\16 Colony Integrator attached")
         term.setCursorPos(2, 12); term.write("\16 Colony Integrator in a colony")
         term.setCursorPos(2, 14); term.write("\16 ME or RS Bridge attached")
         term.setCursorPos(2, 16); term.write("\16 Storage/Warehouse attached")
+        needTermDrawRequirements_executed = true -- Set after labels are drawn
     end
     termWidth, termHeight = term.getSize() 
  
@@ -844,6 +840,7 @@ end
  
 ----------------------------------------------------------------------------
 --* MINECOLONIES
+-- ... (This section is unchanged)
 ----------------------------------------------------------------------------
 function removeNamespace(itemName)
     if type(itemName) ~= "string" then return tostring(itemName) end
@@ -869,12 +866,12 @@ local function isEquipment(desc)
 end
  
 function colonyCategorizeRequests()
-    local armor_list = {}            -- NEW
-    local tools_list = {}            -- NEW
-    local other_equipment_list = {}  -- NEW
+    local armor_list = {}            
+    local tools_list = {}            
+    local other_equipment_list = {}  
     local builder_list_standard = {} 
     local builder_list_domum = {}    
-    local others_list = {}           -- For non-builder, non-equipment requests
+    local others_list = {}           
  
     if not colony then
         logToFile("Colony Integrator not available for categorizing requests.", "WARN_", true)
@@ -899,7 +896,7 @@ function colonyCategorizeRequests()
         local count = req.count or 0
         local item_displayName = trimLeadingWhitespace(req.items[1].displayName or name_from_req)
         local item_name_raw = req.items[1].name or "" 
-        local itemIsGenerallyEquipment = isEquipment(desc) -- General check
+        local itemIsGenerallyEquipment = isEquipment(desc) 
         
         local nbtToStore = req.items[1].nbt
         local fingerprintToStore = req.items[1].fingerprint
@@ -916,7 +913,6 @@ function colonyCategorizeRequests()
             desc = desc, 
             provided = 0, 
             isCraftable = false,
-            -- equipment = itemIsGenerallyEquipment, -- We'll use specific lists now
             displayColor = colors.white, 
             level = "Any Level", 
             nbtData = nbtToStore,
@@ -925,7 +921,6 @@ function colonyCategorizeRequests()
 
         if string.find(target, "Builder", 1, true) then
             if isDomumOrnamentumItem then
-                -- ... (Domum formatting logic remains the same) ...
                 local blockType = removeNamespace(item_name_raw)
                 local textureData = nbtToStore and nbtToStore["textureData"]
                 local textureDataSize = 0
@@ -991,7 +986,6 @@ function colonyCategorizeRequests()
             itemEntry.level = extractedLevel 
             itemEntry.name = extractedLevel .. " " .. name_from_req 
             
-            -- Sort into Armor, Tools, or Other Equipment
             local baseType = getBaseEquipmentType(name_from_req)
             if baseType == "Helmet" or baseType == "Chestplate" or baseType == "Leggings" or baseType == "Boots" then
                 table.insert(armor_list, itemEntry)
@@ -1001,7 +995,7 @@ function colonyCategorizeRequests()
                  table.insert(other_equipment_list, itemEntry)
             else
                 logToFile("Unknown equipment type for categorization: " .. name_from_req .. " (Base: " .. baseType .. "). Adding to Other Equipment as fallback.", "WARN_")
-                table.insert(other_equipment_list, itemEntry) -- Fallback
+                table.insert(other_equipment_list, itemEntry) 
             end
         else
             itemEntry.name = name_from_req 
@@ -1014,7 +1008,7 @@ end
  
 ----------------------------------------------------------------------------
 --* STORAGE SYSTEM REQUEST AND SEND
--- ... (equipmentCraft and storageSystemHandleRequests will need to be adapted for the new lists)
+-- ... (This section is unchanged from 1.23)
 ----------------------------------------------------------------------------
 local b_craftEquipment = true
 local item_quantity_field = nil
@@ -1091,14 +1085,13 @@ function detectQuantityFieldOnce(itemName, nbtTable, fingerprint)
     return item_quantity_field
 end
  
-function storageSystemHandleRequests(request_list, list_name_for_logging) -- Added list_name for better logs
+function storageSystemHandleRequests(request_list, list_name_for_logging) 
     list_name_for_logging = list_name_for_logging or "UnknownList"
     if not bridge or not storage then
         logToFile("Bridge or storage not available for handling requests ("..list_name_for_logging..").", "WARN_", true)
         return
     end
     if not request_list or #request_list == 0 then
-        -- logToFile("No items in request list: " .. list_name_for_logging, "DEBUG") -- Optional: can be spammy
         return
     end
     logToFile("Processing request list: " .. list_name_for_logging .. " (" .. #request_list .. " items)", "INFO_")
@@ -1118,9 +1111,6 @@ function storageSystemHandleRequests(request_list, list_name_for_logging) -- Add
             logToFile("  Original Raw ID: " .. item.item_name_raw, "DEBUG", bShowInGameLog)
         end
  
-        -- The 'equipment' field in itemEntry is not strictly needed anymore for this check,
-        -- as we are processing specific lists (armor, tools, other_equipment).
-        -- However, b_craftEquipment still acts as a master switch.
         if (list_name_for_logging == "Armor" or list_name_for_logging == "Tools" or list_name_for_logging == "OtherEquipment") and b_craftEquipment then 
             local potentialTargetItem, tierCraftableByRules
             potentialTargetItem, tierCraftableByRules = equipmentCraft(item.name, item.level, item.item_name_raw)
@@ -1358,7 +1348,7 @@ function main()
  
     logToFile("Entering main loop...", "INFO_") 
     while true do
-        updatePeripheralAll(false) 
+        -- updatePeripheralAll(false) -- REMOVED from main loop for performance
         if bShowInGameLog then termShowLog() end
         
         local armor_list, tools_list, other_equipment_list, builder_list_standard, builder_list_domum, others_list = requestAndFulfill() 
